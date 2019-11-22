@@ -12,6 +12,7 @@
 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <unistd.h>
 
 #define EC_NID NID_secp521r1
 
@@ -20,6 +21,8 @@
 #define AES_GCM_256_TAG_SIZE 16
 #define AES_MODE_ENCRYPT 1
 #define AES_MODE_DECRYPT 0
+
+#define MAX_CONNS 1
 
 typedef struct HandshakeRequest {
     ASN1_INTEGER *deviceId;
@@ -124,13 +127,41 @@ struct Token {
 
 class Connection {
 public:
-    Connection (int port) : mPort(port), isListening(false) {}
-    int StartListening () {
-        mSockfd = socket(AF_INET, SOCK_STREAM, 0);
+    Connection(unsigned short port) : mOpen(false), mPort(port) {}
+    ~Connection() {
+        if (mOpen)
+            close(mSockfd);
+    }
+
+    int StartListening() {
+        mSockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (mSockfd <= 0) {
             SetErr(errno);
             return -1;
         }
+
+        mOpen = true;
+
+        struct sockaddr_in addr;
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        addr.sin_port = static_cast<unsigned short>(htons(mPort));
+        if (bind(mSockfd, reinterpret_cast<const struct sockaddr*>(&addr),
+                 sizeof(addr))) {
+            SetErr(errno);
+            return -1;
+        }
+
+        if (listen(mSockfd, MAX_CONNS)) {
+                SetErr(errno);
+                return -1;
+        }
+
+        return 0;
+    }
+
+    int GetNextConnection() {
+        return accept(mSockfd, nullptr, nullptr);
     }
 
     int GetLastError() {
@@ -142,10 +173,10 @@ public:
     }
 
 private:
+    bool mOpen;
     int mSockfd;
-    int mPort;
     int mLastError;
-    bool isListening;
+    unsigned short mPort;
 
     void SetErr(int err) {
         mLastError = err;
