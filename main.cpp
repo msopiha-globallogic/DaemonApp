@@ -184,9 +184,10 @@ private:
 };
 
 int main() {
-    try {
-        Key key("key", "password");
-    } catch (int err) {
-        std::cout<<strerror(err)<<"\n";
-    }
+    Connection con(8080);
+    if (con.StartListening())
+        std::cout << "Failed to start listening. Err = " << con.GetLastErrorString()
+                  << std::endl;
+    int confd = con.GetNextConnection();
+
 }
