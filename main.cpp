@@ -72,10 +72,20 @@ ASN1_SEQUENCE(KEY_BLOB) = {
 }ASN1_SEQUENCE_END(KEY_BLOB);
 IMPLEMENT_ASN1_FUNCTIONS(KEY_BLOB);
 
-class Key {
+typedef struct SignalValue {
+    ASN1_ENUMERATED *signalValue;
+}SIGNAL_VALUE;
+
+ASN1_SEQUENCE(SIGNAL_VALUE) = {
+    ASN1_SIMPLE(SIGNAL_VALUE, signalValue, ASN1_ENUMERATED),
+}ASN1_SEQUENCE_END(SIGNAL_VALUE);
+IMPLEMENT_ASN1_FUNCTIONS(SIGNAL_VALUE);
+
+
+class SymmetricKey {
 public:
     /* Throws errno as exception */
-    Key(std::string filename, std::string pwd) throw(int) {
+    SymmetricKey(std::string filename, std::string pwd) throw(int) {
         FILE *hFile = fopen(filename.c_str(), "rb");
         if (!hFile)
             throw errno;
@@ -108,7 +118,7 @@ public:
         mPwd = pwd;
     }
 
-    ~Key() {
+    ~SymmetricKey() {
         KEY_BLOB_free(mKey);
     }
 
@@ -118,11 +128,25 @@ private:
 
 };
 
-struct Token {
+class Token {
+public:
+    Token(): mState(SecurityState::Invalid){}
     enum SecurityState {
-	Permissive = 0,
-	Enforced
-    } state;
+        Permissive = 0,
+        Enforced,
+        Invalid
+    };
+
+    SecurityState getState() {
+        return mState;
+    }
+
+    void setState(SecurityState state) {
+        mState = state;
+    }
+
+private:
+    SecurityState  mState;
 };
 
 class Connection {
@@ -183,11 +207,43 @@ private:
     }
 };
 
+class Session {
+public:
+    Session(int fd) : mFd(fd) {}
+    ~Session () { close(mFd); }
+
+    Token getSessionToken() {
+        Token token;
+        if (ProcessHandshake())
+            return token;
+
+        return token;
+    }
+
+private:
+    int mFd;
+    int ProcessHandshake() {
+        unsigned char buf[100];
+        ssize_t bytes = read(mFd, buf, sizeof(buf));
+        std::cout << "Message:\n";
+        while (bytes--) {
+            std::cout << buf[bytes];
+        }
+
+        std::cout<<std::endl;
+        return 0;
+    }
+
+    int PopulateToken (Token &token) {
+        return 0;
+    }
+};
+
 int main() {
     Connection con(8080);
     if (con.StartListening())
         std::cout << "Failed to start listening. Err = " << con.GetLastErrorString()
                   << std::endl;
-    int confd = con.GetNextConnection();
-
+    Session s(con.GetNextConnection());
+    Token t = s.getSessionToken();
 }
