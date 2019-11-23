@@ -6,6 +6,7 @@
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 #include <iostream>
+#include <fstream>
 #include <cstdio>
 #include <cstring>
 #include <errno.h>
@@ -13,6 +14,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#include <vector>
 
 #define EC_NID NID_secp521r1
 
@@ -82,35 +84,52 @@ ASN1_SEQUENCE(SIGNAL_VALUE) = {
 IMPLEMENT_ASN1_FUNCTIONS(SIGNAL_VALUE);
 
 
+class Reader {
+public:
+    Reader(std::string fileName) : mFileName(fileName), mRead(false) {}
+    ~Reader();
+
+    const std::vector <unsigned char> &GetContent() {
+        if (!mRead)
+            Read();
+
+        return mData;
+    }
+
+private:
+    std::fstream mFile;
+    std::string mFileName;
+    std::vector <unsigned char> mData;
+    bool mRead;
+
+    void Read () {
+        mFile.open(mFileName.c_str(), std::ios::binary);
+        if (mFile.fail())
+            return;
+
+        long fSize = mFile.tellg();
+        mFile.seekg( 0, std::ios::end );
+        fSize = mFile.tellg() - fSize;
+        mFile.seekg( 0, std::ios::beg );
+
+        mData.resize(static_cast<unsigned long>(fSize));
+        char *vecPtr = reinterpret_cast<char*>(mData.data());
+        mFile.read(vecPtr, fSize);
+        mFile.close();
+
+        mRead = true;
+    }
+};
+
 class SymmetricKey {
 public:
     /* Throws errno as exception */
-    SymmetricKey(std::string filename, std::string pwd) throw(int) {
-        FILE *hFile = fopen(filename.c_str(), "rb");
-        if (!hFile)
-            throw errno;
+    SymmetricKey(std::string filename, std::string pwd)  throw(int) {
+        Reader r(filename);
 
-        fseek(hFile , 0 , SEEK_END);
-        size_t lSize = static_cast<size_t>(ftell(hFile));
-        rewind(hFile);
-
-        unsigned char *data = static_cast<unsigned char *>(std::malloc(lSize));
-        if (!data) {
-            fclose (hFile);
-            throw -ENOMEM;
-        }
-
-        size_t rSize = fread(data, 1, lSize, hFile);
-        fclose(hFile);
-
-        if (lSize != rSize) {
-            std::free(data);
-            throw -EIO;
-        }
-
-        const unsigned char *ptr = data;
-        mKey = d2i_KEY_BLOB(nullptr, &ptr, static_cast<long>(lSize));
-        std::free(data);
+        const unsigned char *ptr = r.GetContent().data();
+        long lSize = static_cast<long>(r.GetContent().size());
+        mKey = d2i_KEY_BLOB(nullptr, &ptr, lSize);
 
         if (!mKey)
             throw -EINVAL;
@@ -209,8 +228,11 @@ private:
 
 class Session {
 public:
-    Session(int fd) : mFd(fd) {}
-    ~Session () { close(mFd); }
+    Session(int fd) : mFd(fd), mPeerkey(nullptr) {}
+    ~Session () {
+        close(mFd);
+        EC_KEY_free(mPeerkey);
+    }
 
     Token getSessionToken() {
         Token token;
@@ -222,15 +244,49 @@ public:
 
 private:
     int mFd;
-    int ProcessHandshake() {
-        unsigned char buf[100];
-        ssize_t bytes = read(mFd, buf, sizeof(buf));
-        std::cout << "Message:\n";
-        while (bytes--) {
-            std::cout << buf[bytes];
+    EC_KEY *mPeerkey;
+
+    HANDSHAKE_REQUEST *GetHandshakeRequest() {
+        unsigned char buf[BUF_LEN_DEFAULT];
+        const unsigned char *ptr = buf;
+        size_t bytes = static_cast<size_t>(read(mFd, buf, sizeof(buf)));
+        if (!bytes || bytes == sizeof(buf)) {
+            return nullptr;
         }
 
-        std::cout<<std::endl;
+        return d2i_HANDSHAKE_REQUEST(nullptr, &ptr, static_cast<long>(sizeof(buf)));
+    }
+
+    X509 *GetPeerCert () {
+        Reader r("cert");
+        const unsigned char* certPtr = r.GetContent().data();
+        size_t certLen = r.GetContent().size();
+        return d2i_X509(nullptr, &certPtr, static_cast<long>(certLen));
+    }
+
+    int VerifyHandshakeRequest (HANDSHAKE_REQUEST * request,
+                                X509 *peerCert) {
+
+    }
+
+    int ProcessHandshake() {
+        /*
+         * It is not expected here to get big data. So we are not
+         * doing any loops here
+         */
+
+        HANDSHAKE_REQUEST * request = GetHandshakeRequest();
+        if (!request)
+            return -1;
+
+        X509 *cert = GetPeerCert();
+        if (!cert)
+            return -1;
+
+
+
+        /*EC_KEY_oct2key*/
+
         return 0;
     }
 
