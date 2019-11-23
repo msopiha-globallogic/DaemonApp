@@ -16,12 +16,13 @@
 #include "connection.h"
 #include "session.h"
 
-auto payload() -> void {
+auto PosixDaemon::payload() -> void {
     LOGI("Payload start");
     Connection con(8080);
-    if (con.StartListening()) {
-        std::cout << "Failed to start listening. Err = " << con.GetLastErrorString()
-                  << std::endl;
+    if (con.StartListening() != 0) {
+        LOGE("Failed to start listening. Err = %s\n", con.GetLastErrorString().c_str());
+//        std::cout << "Failed to start listening. Err = " << con.GetLastErrorString()
+//                  << std::endl;
     } else {
         while(1) {
             Session s(con.GetNextConnection(), "cert", "key");

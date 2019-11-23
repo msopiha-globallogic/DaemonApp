@@ -7,7 +7,7 @@ To make this buildable:
 
 2.  cd <openssl_source_dir>
 
-3.  ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl '-Wl,--enable-new-dtags,-rpath,$(LIBRPATH)
+3.  ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -Wl,--enable-new-dtags,-rpath,$(LIBRPATH)
     make -jx
 
 2. Configure your path to openssl directory in makefile (the openssl that was built in step 1)
