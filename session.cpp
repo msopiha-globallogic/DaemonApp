@@ -290,12 +290,13 @@ int Session::ProcessHandshake(std::vector<unsigned char> &sharedSecret) {
     //EC_KEY *peerKey = EC_KEY_new();
     std::unique_ptr<EC_KEY, void (*)(EC_KEY*)> peerKey = std::unique_ptr<EC_KEY, void (*)(EC_KEY*)>(EC_KEY_new(), EC_KEY_free);
     EC_KEY *key = EC_KEY_new_by_curve_name(EC_NID);
+    EC_KEY *p = peerKey.get();
     if (!peerKey || !key) {
         goto out;
     }
 
     if (!EC_KEY_generate_key(key) ||
-        !o2i_ECPublicKey(&peerKey, &ptr,
+        !o2i_ECPublicKey(&p, &ptr,
                          static_cast<long>(request->tbs->publicKeyInfo->length))) {
         goto out;
     }
