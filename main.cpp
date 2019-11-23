@@ -252,6 +252,10 @@ private:
     std::vector<unsigned short> mSharedSecret;
 
     HANDSHAKE_REQUEST *GetHandshakeRequest() {
+        /*
+         * It is not expected here to get big data. So we are not
+         * doing any loops here
+         */
         unsigned char buf[BUF_LEN_DEFAULT];
         const unsigned char *ptr = buf;
         size_t bytes = static_cast<size_t>(read(mFd, buf, sizeof(buf)));
@@ -274,7 +278,7 @@ private:
         std::vector<unsigned char> signedData;
 
         if (ASN1_INTEGER_get(request->tbs->deviceId) != DEVICE_ID)
-            return -1;
+            return ret;
 
         int signedLen = i2d_HANDSHAKE_TBS(request->tbs, nullptr);
         if (signedLen <= 0) {
@@ -314,12 +318,14 @@ private:
             goto out;
         }
 
-        ret = EVP_PKEY_verify(ctx,
-                              request->signature->data,
-                              static_cast<size_t>(request->signature->length),
-                              signedData.data(),
-                              static_cast<size_t>(signedLen));
+        if(!EVP_PKEY_verify(ctx,
+                            request->signature->data,
+                            static_cast<size_t>(request->signature->length),
+                            signedData.data(),
+                            static_cast<size_t>(signedLen)))
+            goto out;
 
+        ret = 0;
 out:
         EVP_PKEY_CTX_free(ctx);
         X509_free(peerCert);
@@ -327,11 +333,6 @@ out:
     }
 
     int ProcessHandshake() {
-        /*
-         * It is not expected here to get big data. So we are not
-         * doing any loops here
-         */
-
         HANDSHAKE_REQUEST * request = GetHandshakeRequest();
         if (!request)
             return -1;
@@ -341,6 +342,7 @@ out:
             return -1;
         }
 
+        /*EC_KEY_key2buf*/
         /*EC_KEY_oct2key*/
 
         return 0;
