@@ -3,6 +3,8 @@ To make this buildable:
 
     Go to https://www.openssl.org/source/, download openssl-1.1.1d archive, unzip.
 
+    wget https://www.openssl.org/source/openssl-1.1.1d.tar.gz
+
 2.  cd <openssl_source_dir>
 
 3.  ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl '-Wl,--enable-new-dtags,-rpath,$(LIBRPATH)
