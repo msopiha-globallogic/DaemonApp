@@ -88,7 +88,7 @@ IMPLEMENT_ASN1_FUNCTIONS(SIGNAL_VALUE);
 class Reader {
 public:
     Reader(std::string fileName) : mFileName(fileName), mRead(false) {}
-    ~Reader();
+    ~Reader() {};
 
     const std::vector <unsigned char> &GetContent() {
         if (!mRead)
@@ -98,15 +98,17 @@ public:
     }
 
 private:
-    std::fstream mFile;
+    std::ifstream mFile;
     std::string mFileName;
     std::vector <unsigned char> mData;
     bool mRead;
 
     void Read () {
         mFile.open(mFileName.c_str(), std::ios::binary);
-        if (mFile.fail())
+
+        if (mFile.fail()) {
             return;
+        }
 
         long fSize = mFile.tellg();
         mFile.seekg( 0, std::ios::end );
@@ -122,10 +124,10 @@ private:
     }
 };
 
-class SymmetricKey {
+class PrivateKey {
 public:
     /* Throws errno as exception */
-    SymmetricKey(std::string filename, std::string pwd)  throw(int) {
+    PrivateKey(std::string filename, std::string pwd)  throw(int) {
         Reader r(filename);
 
         const unsigned char *ptr = r.GetContent().data();
@@ -138,14 +140,13 @@ public:
         mPwd = pwd;
     }
 
-    ~SymmetricKey() {
+    ~PrivateKey() {
         KEY_BLOB_free(mKey);
     }
 
 private:
     KEY_BLOB *mKey;
     std::string mPwd;
-
 };
 
 class Token {
@@ -229,10 +230,10 @@ private:
 
 class Session {
 public:
-    Session(int fd) : mFd(fd), mPeerkey(nullptr) {}
+    Session(int fd, std::string cert, std::string key) : mFd(fd),
+        mPeerCertFileName(cert), mPrivateKeyFileName(key) {}
     ~Session () {
         close(mFd);
-        EC_KEY_free(mPeerkey);
     }
 
     Token getSessionToken() {
@@ -245,7 +246,8 @@ public:
 
 private:
     int mFd;
-    EC_KEY *mPeerkey;
+    std::string mPeerCertFileName;
+    std::string mPrivateKeyFileName;
 
     HANDSHAKE_REQUEST *GetHandshakeRequest() {
         unsigned char buf[BUF_LEN_DEFAULT];
@@ -259,15 +261,56 @@ private:
     }
 
     X509 *GetPeerCert () {
-        Reader r("cert");
+        Reader r(mPeerCertFileName);
         const unsigned char* certPtr = r.GetContent().data();
         size_t certLen = r.GetContent().size();
         return d2i_X509(nullptr, &certPtr, static_cast<long>(certLen));
     }
 
-    int VerifyHandshakeRequest (HANDSHAKE_REQUEST * request,
+    int VerifyHandshakeRequest (HANDSHAKE_REQUEST *request,
                                 X509 *peerCert) {
+        int ret = -1;
+        std::vector<unsigned char> signedData;
+        int signedLen = i2d_HANDSHAKE_TBS(request->tbs, nullptr);
+        if (signedLen <= 0) {
+            return ret;
+        }
 
+        unsigned char *ptr = signedData.data();
+
+        signedData.resize(static_cast<unsigned long>(signedLen));
+        if (i2d_HANDSHAKE_TBS(request->tbs, &ptr) != signedLen) {
+            return ret;
+        }
+
+        EVP_PKEY *pKey = X509_get0_pubkey(peerCert);
+        if (!pKey) {
+            return ret;
+        }
+
+        EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
+        if (!ctx) {
+            return ret;
+        }
+
+        if (!EVP_PKEY_verify_init(ctx)) {
+            goto out;
+        }
+
+        /* using default signature hashing alg sha256 for demo*/
+        if (!EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256())) {
+            goto out;
+        }
+
+        ret = EVP_PKEY_verify(ctx,
+                              request->signature->data,
+                              static_cast<size_t>(request->signature->length),
+                              signedData.data(),
+                              static_cast<size_t>(signedLen));
+
+out:
+        EVP_PKEY_CTX_free(ctx);
+        return ret;
     }
 
     int ProcessHandshake() {
@@ -281,10 +324,18 @@ private:
             return -1;
 
         X509 *cert = GetPeerCert();
-        if (!cert)
+        if (!cert) {
+            HANDSHAKE_REQUEST_free(request);
             return -1;
+        }
 
+        int ret = VerifyHandshakeRequest(request, cert);
+        X509_free(cert);
 
+        if(ret) {
+            HANDSHAKE_REQUEST_free(request);
+            return -1;
+        }
 
         /*EC_KEY_oct2key*/
 
@@ -301,6 +352,6 @@ int main() {
     if (con.StartListening())
         std::cout << "Failed to start listening. Err = " << con.GetLastErrorString()
                   << std::endl;
-    Session s(con.GetNextConnection());
+    Session s(con.GetNextConnection(), "cert", "key");
     Token t = s.getSessionToken();
 }
