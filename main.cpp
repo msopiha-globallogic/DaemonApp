@@ -54,11 +54,13 @@ IMPLEMENT_ASN1_FUNCTIONS(HANDSHAKE_REQUEST);
 
 typedef struct SignalMessage {
     ASN1_OCTET_STRING *encryptedSignal;
+    ASN1_OCTET_STRING *tag;
     ASN1_OCTET_STRING *iv;
 } SIGNAL_MESSAGE;
 
 ASN1_SEQUENCE(SIGNAL_MESSAGE) = {
     ASN1_SIMPLE(SIGNAL_MESSAGE, encryptedSignal, ASN1_OCTET_STRING),
+    ASN1_SIMPLE(SIGNAL_MESSAGE, tag, ASN1_OCTET_STRING),
     ASN1_SIMPLE(SIGNAL_MESSAGE, iv, ASN1_OCTET_STRING),
 }ASN1_SEQUENCE_END(SIGNAL_MESSAGE);
 IMPLEMENT_ASN1_FUNCTIONS(SIGNAL_MESSAGE);
@@ -88,8 +90,16 @@ IMPLEMENT_ASN1_FUNCTIONS(SIGNAL_VALUE);
 /* For demo version we are not thinking of rewriting keys in memory after usage */
 class AES {
 public:
-    AES(std::string password) : mPwd(password){}
-    ~AES(){}
+    AES(std::vector<unsigned char> &key) : mKey(key) {}
+    AES(std::string password) : mPwd(password){
+        mKey.resize(AES_GCM_256_KEY_SIZE);
+        SHA256(reinterpret_cast<const unsigned char*>(mPwd.c_str()),
+               strlen(mPwd.c_str()), mKey.data());
+    }
+    ~AES(){
+        mKey.clear();
+    }
+
     void setIv(unsigned char *data, int length) {
         mIv.clear();
         mIv.resize(static_cast<size_t>(length));
@@ -197,14 +207,10 @@ private:
     std::string mPwd;
     std::vector<unsigned char> mIv;
     std::vector<unsigned char> mTag;
+    std::vector<unsigned char> mKey;
 
-    std::vector <unsigned char> getKey () {
-        std::vector<unsigned char> key(AES_GCM_256_KEY_SIZE);
-
-        SHA256(reinterpret_cast<const unsigned char*>(mPwd.c_str()),
-               strlen(mPwd.c_str()), key.data());
-
-        return key;
+    std::vector <unsigned char> &getKey () {
+        return mKey;
     }
 
 
@@ -355,8 +361,16 @@ public:
         return mState;
     }
 
-    void setState(SecurityState state) {
-        mState = state;
+    void setState(long state) {
+        switch (state) {
+        case Permissive:
+            mState = Permissive;
+            break;
+        case Enforced:
+            mState = Enforced;
+        default:
+            break;
+        }
     }
 
 private:
@@ -430,12 +444,11 @@ public:
     }
 
     Token getSessionToken() {
-        Token token;
         std::vector<unsigned char> sharedKey;
         if (ProcessHandshake(sharedKey))
-            return token;
+            return Token();
 
-        return token;
+        return GetToken(sharedKey);
     }
 
 private:
@@ -449,14 +462,16 @@ private:
          * It is not expected here to get big data. So we are not
          * doing any loops here
          */
-        unsigned char buf[BUF_LEN_DEFAULT];
-        const unsigned char *ptr = buf;
-        size_t bytes = static_cast<size_t>(read(mFd, buf, sizeof(buf)));
-        if (!bytes || bytes == sizeof(buf)) {
+        std::vector<unsigned char> buf(BUF_LEN_DEFAULT);
+        ssize_t bytes = read(mFd, buf.data(), buf.size());
+        if (!bytes || bytes < 0) {
             return nullptr;
         }
 
-        return d2i_HANDSHAKE_REQUEST(nullptr, &ptr, static_cast<long>(sizeof(buf)));
+        buf.resize(static_cast<size_t>(bytes));
+
+        const unsigned char *ptr = buf.data();
+        return d2i_HANDSHAKE_REQUEST(nullptr, &ptr, static_cast<long>(buf.size()));
     }
 
     int SetHangshakeResponse(HANDSHAKE_REQUEST *response) {
@@ -715,8 +730,42 @@ out:
         return ret;
     }
 
-    int PopulateToken (Token &token) {
-        return 0;
+    Token GetToken(std::vector<unsigned char> &sharedKey) {
+        Token token;
+        std::vector<unsigned char> buf(BUF_LEN_DEFAULT);
+        ssize_t bytes = read(mFd, buf.data(), buf.size());
+        if (!bytes || bytes < 0) {
+            return token;
+        }
+
+        buf.resize(static_cast<size_t>(bytes));
+        const unsigned char *ptr = buf.data();
+
+        SIGNAL_MESSAGE *message = d2i_SIGNAL_MESSAGE(nullptr, &ptr,
+                                                     static_cast<long>(buf.size()));
+
+        if (!message)
+            return token;
+
+        AES key(sharedKey);
+        key.setIv(message->iv->data, message->iv->length);
+        key.setTag(message->tag->data, message->tag->length);
+
+        if (key.Encrypt(message->encryptedSignal->data,
+                        message->encryptedSignal->length,
+                        AES_MODE_DECRYPT,
+                        message->encryptedSignal->data)) {
+            SIGNAL_MESSAGE_free(message);
+            return token;
+        }
+
+        /* the signal already decrypted */
+        ptr = message->encryptedSignal->data;
+        SIGNAL_VALUE *value = d2i_SIGNAL_VALUE(nullptr, &ptr,
+                                               message->encryptedSignal->length);
+        SIGNAL_MESSAGE_free(message);
+        token.setState(ASN1_ENUMERATED_get(value->signalValue));
+        return token;
     }
 };
 
