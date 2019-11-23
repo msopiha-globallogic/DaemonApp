@@ -13,6 +13,7 @@ int main(int argc, char** argv){
         "/tmp/sdbg-server.pid"
     };
 
+    daemon.init();
     daemon.run();
     return 0;
 }

@@ -16,6 +16,11 @@
 #include "connection.h"
 #include "session.h"
 
+auto PosixDaemon::init() -> bool {
+    return true;
+}
+
+
 auto PosixDaemon::payload() -> void {
     LOGI("Payload start");
     Connection con(8080);

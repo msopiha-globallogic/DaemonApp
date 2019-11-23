@@ -17,6 +17,8 @@ public:
 
     auto run() -> void;
 
+    auto init() -> bool;
+
 private:
     std::string m_path;
     std::string m_pidfile;
