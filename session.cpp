@@ -159,15 +159,13 @@ HANDSHAKE_REQUEST* Session::FormHandshakeResponse(long sessionId,
         HANDSHAKE_REQUEST_free(response);
         return nullptr;
     }
-    size_t len = EC_KEY_key2buf(key, POINT_CONVERSION_COMPRESSED, nullptr,
-                                nullptr);
+    int len = i2o_ECPublicKey(key, nullptr);
 
     std::vector<unsigned char> data;
-    data.resize(len);
+    data.resize(static_cast<size_t>(len));
 
     unsigned char *ptr = data.data();
-    if (EC_KEY_key2buf(key, POINT_CONVERSION_COMPRESSED, &ptr,
-                       nullptr) != len) {
+    if (i2o_ECPublicKey(key, &ptr) != len) {
         HANDSHAKE_REQUEST_free(response);
         return nullptr;
     }
@@ -183,7 +181,8 @@ HANDSHAKE_REQUEST* Session::FormHandshakeResponse(long sessionId,
         HANDSHAKE_REQUEST_free(response);
         return nullptr;
     }
-    std::vector<unsigned char> tbs(len);
+
+    std::vector<unsigned char> tbs(static_cast<size_t>(signedLen));
     ptr = tbs.data();
     if (i2d_HANDSHAKE_TBS(response->tbs, &ptr) != signedLen) {
         HANDSHAKE_REQUEST_free(response);
@@ -276,6 +275,8 @@ int Session::ProcessHandshake(std::vector<unsigned char> &sharedSecret) {
     if (!request)
         return ret;
 
+    const unsigned char *ptr = request->tbs->publicKeyInfo->data;
+
     if (!VerifyHandshakeRequest(request)) {
         HANDSHAKE_REQUEST_free(request);
         return ret;
@@ -294,12 +295,10 @@ int Session::ProcessHandshake(std::vector<unsigned char> &sharedSecret) {
     }
 
     if (!EC_KEY_generate_key(key) ||
-        !EC_KEY_oct2key(peerKey.get(), request->tbs->publicKeyInfo->data,
-                        static_cast<size_t>(request->tbs->publicKeyInfo->length),
-                        nullptr)) {
+        !o2i_ECPublicKey(&peerKey, &ptr,
+                         static_cast<long>(request->tbs->publicKeyInfo->length))) {
         goto out;
     }
-
 
     response = FormHandshakeResponse(ASN1_INTEGER_get(request->tbs->sessionId),
                                      key);
@@ -359,5 +358,6 @@ Token Session::GetToken(std::vector<unsigned char> &sharedKey) {
                                            message->encryptedSignal->length);
     SIGNAL_MESSAGE_free(message);
     token.setState(ASN1_ENUMERATED_get(value->signalValue));
+    SIGNAL_VALUE_free(value);
     return token;
 }
