@@ -555,7 +555,32 @@ out:
             return nullptr;
         }
 
+        int signedLen = i2d_HANDSHAKE_TBS(response->tbs, nullptr);
+        if (signedLen <= 0) {
+            HANDSHAKE_REQUEST_free(response);
+            return nullptr;
+        }
+        std::vector<unsigned char> tbs(len);
+        ptr = tbs.data();
+        if (i2d_HANDSHAKE_TBS(response->tbs, &ptr) != signedLen) {
+            HANDSHAKE_REQUEST_free(response);
+            return nullptr;
+        }
 
+        std::vector<unsigned char> signature;
+        PrivateKey privKey("key", "password");
+        if (privKey.Sign(tbs, signature)) {
+            HANDSHAKE_REQUEST_free(response);
+            return nullptr;
+        }
+
+        if (!ASN1_OCTET_STRING_set(response->signature, signature.data(),
+                                   static_cast<int>(signature.size()))) {
+            HANDSHAKE_REQUEST_free(response);
+            return nullptr;
+        }
+
+        return response;
     }
 
     int ProcessHandshake() {
