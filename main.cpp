@@ -85,11 +85,135 @@ ASN1_SEQUENCE(SIGNAL_VALUE) = {
 }ASN1_SEQUENCE_END(SIGNAL_VALUE);
 IMPLEMENT_ASN1_FUNCTIONS(SIGNAL_VALUE);
 
+/* For demo version we are not thinking of rewriting keys in memory after usage */
+class AES {
+public:
+    AES(std::string password) : mPwd(password){}
+    ~AES(){}
+    void setIv(unsigned char *data, int length) {
+        mIv.clear();
+        mIv.resize(static_cast<size_t>(length));
+        memcpy(mIv.data(), data, static_cast<size_t>(length));
+    }
+
+    std::vector<unsigned char>& getIv () {
+        return mIv;
+    }
+
+    void setTag(unsigned char *data, int length) {
+        mTag.clear();
+        mTag.resize(static_cast<size_t>(length));
+        memcpy(mTag.data(), data, static_cast<size_t>(length));
+    }
+
+    std::vector<unsigned char>& getTag () {
+        return mTag;
+    }
+
+    /**
+     * @brief               Encrypts/decrypts the data.
+     *
+     * @note                Encrypted/decrypted data is written in the same buffer as input data.
+     *
+     * @param data          Data to encrypt.
+     * @param dataLen       Data length.
+     * @param mode          AES_MODE_ENCRYPT or AES_MODE_DECRYPT
+     * @return              0 on success, -1 on failure
+     */
+    int Encrypt(unsigned char *data,
+                const int dataLen,
+                const int mode,
+                unsigned char *out) {
+        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+        int outLen = 0, ret = -1;
+        if (!ctx)
+            return -1;
+
+        int (*pCryptInit)(EVP_CIPHER_CTX *, const EVP_CIPHER *,
+                          const unsigned char *, const unsigned char *) =
+                mode == AES_MODE_ENCRYPT ? EVP_EncryptInit : EVP_DecryptInit;
+
+        int (*pCryptUpdate)(EVP_CIPHER_CTX *, unsigned char *,
+                            int *, const unsigned char *, int) =
+                mode == AES_MODE_ENCRYPT ? EVP_EncryptUpdate : EVP_DecryptUpdate;
+
+        int (*pCryptFinal)(EVP_CIPHER_CTX *, unsigned char *, int *) =
+                mode == AES_MODE_ENCRYPT ? EVP_EncryptFinal : EVP_DecryptFinal;
+
+        if (!pCryptInit(ctx, EVP_aes_256_gcm(), nullptr, nullptr)) {
+            goto err;
+        }
+
+        if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN,
+                                 static_cast<int>(mIv.size()),
+                                 nullptr)) {
+            goto err;
+        }
+
+        if (mode == AES_MODE_DECRYPT &&
+            !EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG,
+                                 static_cast<int>(mTag.size()),
+                                 mTag.data())) {
+                goto err;
+        }
+
+        if (!pCryptInit(ctx, nullptr, getKey().data(), mIv.data())) {
+            goto err;
+        }
+
+        /*
+         * Normally we should do the encipherment by blocks in while(..) loop.
+         * In current scenarion no big data is expected, so all input can be consumed
+         * in a single update call. This also explains funtion parameters and design.
+         */
+        if (!pCryptUpdate(ctx, data, &outLen, out, dataLen) ||
+             outLen != dataLen) {
+            goto err;
+        }
+
+        /* AES GCM is not modifying anything on final call */
+        if (!pCryptFinal(ctx, out + outLen, &outLen)) {
+            goto err;
+        }
+
+        if (mode == AES_MODE_ENCRYPT) {
+            unsigned char tag[AES_GCM_256_TAG_SIZE];
+            if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, AES_GCM_256_TAG_SIZE,
+                                     tag)) {
+                goto err;
+            }
+
+            setTag(tag, static_cast<int>(sizeof(tag)));
+        }
+
+        ret = 0;
+
+    err:
+        EVP_CIPHER_CTX_free(ctx);
+        return ret;
+    }
+
+private:
+    std::string mPwd;
+    std::vector<unsigned char> mIv;
+    std::vector<unsigned char> mTag;
+
+    std::vector <unsigned char> getKey () {
+        std::vector<unsigned char> key(AES_GCM_256_KEY_SIZE);
+
+        SHA256(reinterpret_cast<const unsigned char*>(mPwd.c_str()),
+               strlen(mPwd.c_str()), key.data());
+
+        return key;
+    }
+
+
+};
 
 class Reader {
 public:
     Reader(std::string fileName) : mFileName(fileName), mRead(false) {}
-    ~Reader() {};
+    ~Reader() {}
 
     const std::vector <unsigned char> &GetContent() {
         if (!mRead)
@@ -139,6 +263,74 @@ public:
             throw -EINVAL;
 
         mPwd = pwd;
+    }
+
+    /* Decrypt private key and make signature in this routine. */
+    int Sign (std::vector <unsigned char> &data,
+              std::vector <unsigned char> &signature) {
+        AES aesKey(mPwd);
+        std::vector <unsigned char> decryptedEcKey(static_cast<unsigned long>
+                                                   (mKey->encryptedKeyData->length));
+
+        aesKey.setIv(mKey->iv->data, mKey->iv->length);
+        aesKey.setTag(mKey->tag->data, mKey->iv->length);
+        if (aesKey.Encrypt(mKey->encryptedKeyData->data,
+                           mKey->encryptedKeyData->length,
+                           AES_MODE_DECRYPT,
+                           decryptedEcKey.data())) {
+            std::cout << "Failed to make AES decryption\n";
+            return -1;
+        }
+
+        EC_KEY *ecKey = EC_KEY_new();
+        if (!ecKey)
+            return -1;
+
+        if (!EC_KEY_oct2priv(ecKey, decryptedEcKey.data(), decryptedEcKey.size())) {
+            EC_KEY_free(ecKey);
+            return -1;
+        }
+
+        EVP_PKEY *pKey = EVP_PKEY_new();
+        if (!pKey) {
+            EC_KEY_free(ecKey);
+            return -1;
+        }
+
+        if (!EVP_PKEY_assign_EC_KEY(pKey, ecKey)) {
+            EC_KEY_free(ecKey);
+            EVP_PKEY_free(pKey);
+            return -1;
+        }
+
+        int ret = -1;
+        EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
+        if (!EVP_PKEY_sign_init(ctx)) {
+            goto out;
+        }
+
+        if (!EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256())) {
+            goto out;
+        }
+
+        size_t sigLen;
+
+        if (EVP_PKEY_sign(ctx, nullptr, &sigLen, data.data(), data.size()) != 1) {
+            goto out;
+        }
+
+        signature.resize(sigLen);
+        if (EVP_PKEY_sign(ctx, signature.data(), &sigLen, data.data(), data.size()) != 1) {
+            signature.clear();
+            goto out;
+        }
+
+        ret = 0;
+
+out:
+        EVP_PKEY_CTX_free(ctx);
+        EVP_PKEY_free(pKey);
+        return ret;
     }
 
     ~PrivateKey() {
@@ -318,11 +510,11 @@ private:
             goto out;
         }
 
-        if(!EVP_PKEY_verify(ctx,
-                            request->signature->data,
-                            static_cast<size_t>(request->signature->length),
-                            signedData.data(),
-                            static_cast<size_t>(signedLen)))
+        if(EVP_PKEY_verify(ctx,
+                           request->signature->data,
+                           static_cast<size_t>(request->signature->length),
+                           signedData.data(),
+                           static_cast<size_t>(signedLen)) != 1)
             goto out;
 
         ret = 0;
@@ -332,20 +524,80 @@ out:
         return ret;
     }
 
+    HANDSHAKE_REQUEST *FormHandshakeResponse (long sessionId,
+                                              const EC_KEY *key) {
+        HANDSHAKE_REQUEST *response = HANDSHAKE_REQUEST_new();
+        if (!response) {
+            return nullptr;
+        }
+
+        if (!ASN1_INTEGER_set(response->tbs->sessionId, sessionId) ||
+            !ASN1_INTEGER_set(response->tbs->deviceId, DEVICE_ID)) {
+            HANDSHAKE_REQUEST_free(response);
+            return nullptr;
+        }
+        size_t len = EC_KEY_key2buf(key, POINT_CONVERSION_COMPRESSED, nullptr,
+                                    nullptr);
+
+        std::vector<unsigned char> data;
+        data.resize(len);
+
+        unsigned char *ptr = data.data();
+        if (EC_KEY_key2buf(key, POINT_CONVERSION_COMPRESSED, &ptr,
+                           nullptr) != len) {
+            HANDSHAKE_REQUEST_free(response);
+            return nullptr;
+        }
+
+        if (!ASN1_OCTET_STRING_set(response->tbs->publicKeyInfo, data.data(),
+                                   static_cast<int>(len))) {
+            HANDSHAKE_REQUEST_free(response);
+            return nullptr;
+        }
+
+
+    }
+
     int ProcessHandshake() {
+        int ret = -1;
         HANDSHAKE_REQUEST * request = GetHandshakeRequest();
+
         if (!request)
-            return -1;
+            return ret;
 
         if (!VerifyHandshakeRequest(request)) {
             HANDSHAKE_REQUEST_free(request);
-            return -1;
+            return ret;
         }
+
+        /*
+         * for demo we will not be checking EC params -
+         * the default will be use. Also low-level API will be used (EC_KEY
+         * insteda of EVP_PKEY
+         */
+        EC_KEY *peerKey = EC_KEY_new();
+        EC_KEY *key = EC_KEY_new_by_curve_name(EC_NID);
+        if (!peerKey || !key) {
+            goto out;
+        }
+
+        if (!EC_KEY_generate_key(key) ||
+            !EC_KEY_oct2key(peerKey, request->tbs->publicKeyInfo->data,
+                            static_cast<size_t>(request->tbs->publicKeyInfo->length),
+                            nullptr)) {
+            goto out;
+        }
+
 
         /*EC_KEY_key2buf*/
         /*EC_KEY_oct2key*/
 
-        return 0;
+out:
+        EC_KEY_free(peerKey);
+        EC_KEY_free(key);
+        HANDSHAKE_REQUEST_free(request);
+
+        return ret;
     }
 
     int PopulateToken (Token &token) {
