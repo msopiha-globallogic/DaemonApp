@@ -249,6 +249,7 @@ private:
     int mFd;
     std::string mPeerCertFileName;
     std::string mPrivateKeyFileName;
+    std::vector<unsigned short> mSharedSecret;
 
     HANDSHAKE_REQUEST *GetHandshakeRequest() {
         unsigned char buf[BUF_LEN_DEFAULT];
@@ -268,8 +269,7 @@ private:
         return d2i_X509(nullptr, &certPtr, static_cast<long>(certLen));
     }
 
-    int VerifyHandshakeRequest (HANDSHAKE_REQUEST *request,
-                                X509 *peerCert) {
+    int VerifyHandshakeRequest (HANDSHAKE_REQUEST *request) {
         int ret = -1;
         std::vector<unsigned char> signedData;
 
@@ -288,13 +288,20 @@ private:
             return ret;
         }
 
+        X509 *peerCert = GetPeerCert();
+        if (!peerCert) {
+            return -1;
+        }
+
         EVP_PKEY *pKey = X509_get0_pubkey(peerCert);
         if (!pKey) {
+            X509_free(peerCert);
             return ret;
         }
 
         EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
         if (!ctx) {
+            X509_free(peerCert);
             return ret;
         }
 
@@ -315,6 +322,7 @@ private:
 
 out:
         EVP_PKEY_CTX_free(ctx);
+        X509_free(peerCert);
         return ret;
     }
 
@@ -328,16 +336,7 @@ out:
         if (!request)
             return -1;
 
-        X509 *cert = GetPeerCert();
-        if (!cert) {
-            HANDSHAKE_REQUEST_free(request);
-            return -1;
-        }
-
-        int ret = VerifyHandshakeRequest(request, cert);
-        X509_free(cert);
-
-        if(ret) {
+        if (!VerifyHandshakeRequest(request)) {
             HANDSHAKE_REQUEST_free(request);
             return -1;
         }
