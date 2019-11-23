@@ -431,7 +431,8 @@ public:
 
     Token getSessionToken() {
         Token token;
-        if (ProcessHandshake())
+        std::vector<unsigned char> sharedKey;
+        if (ProcessHandshake(sharedKey))
             return token;
 
         return token;
@@ -456,6 +457,25 @@ private:
         }
 
         return d2i_HANDSHAKE_REQUEST(nullptr, &ptr, static_cast<long>(sizeof(buf)));
+    }
+
+    int SetHangshakeResponse(HANDSHAKE_REQUEST *response) {
+        int len = i2d_HANDSHAKE_REQUEST(response, nullptr);
+        if (len <= 0)
+            return -1;
+
+        std::vector<unsigned char> resp(static_cast<unsigned long>(len));
+        unsigned char *ptr = resp.data();
+        if (i2d_HANDSHAKE_REQUEST(response, &ptr) != len)
+            return -1;
+        int bytes = static_cast<int>(write(mFd, resp.data(),
+                                     static_cast<size_t>(len)));
+
+        if (bytes != len) {
+            return -1;
+        }
+
+        return 0;
     }
 
     X509 *GetPeerCert () {
@@ -524,8 +544,8 @@ out:
         return ret;
     }
 
-    HANDSHAKE_REQUEST *FormHandshakeResponse (long sessionId,
-                                              const EC_KEY *key) {
+    HANDSHAKE_REQUEST *FormHandshakeResponse(long sessionId,
+                                             const EC_KEY *key) {
         HANDSHAKE_REQUEST *response = HANDSHAKE_REQUEST_new();
         if (!response) {
             return nullptr;
@@ -583,8 +603,66 @@ out:
         return response;
     }
 
-    int ProcessHandshake() {
+    int DeriveSecret(EC_KEY *privKey, EC_KEY *pubKey,
+                     std::vector<unsigned char> &sharedSecret) {
+        EVP_PKEY *pKey = EVP_PKEY_new();
+        EVP_PKEY *peerKey = EVP_PKEY_new();
+        EVP_PKEY_CTX *ctx = nullptr;
         int ret = -1;
+        EC_KEY *k = nullptr;
+        size_t skeylen = AES_GCM_256_KEY_SIZE;
+
+        if (!pKey || !peerKey) {
+            goto out;
+        }
+
+        /*
+         * We need to duplicate EC keys because assigned keys
+         * will be released with releasing EVP_PKEYS, so the caller
+         * won't be confused by destroyed objects.
+         *
+         * Doing this step-by-step not to loose memory.
+         */
+
+        k = EC_KEY_dup(privKey);
+        if (!EVP_PKEY_assign_EC_KEY(pKey, k)) {
+            EC_KEY_free(k);
+            goto out;
+        }
+
+        k = EC_KEY_dup(pubKey);
+        if (!EVP_PKEY_assign_EC_KEY(peerKey, k)) {
+            EC_KEY_free(k);
+            goto out;
+        }
+
+        ctx = EVP_PKEY_CTX_new(pKey, nullptr);
+        if (!ctx)
+            goto out;
+
+        if (EVP_PKEY_derive_init(ctx) != 1)
+            goto out;
+
+        if (EVP_PKEY_derive_set_peer(ctx, peerKey) != 1)
+            goto out;
+
+        sharedSecret.resize(skeylen);
+        if (EVP_PKEY_derive(ctx, sharedSecret.data(), &skeylen)) {
+            sharedSecret.clear();
+            goto out;
+        }
+
+        ret = 0;
+out:
+        EVP_PKEY_free(pKey);
+        EVP_PKEY_free(peerKey);
+        EVP_PKEY_CTX_free(ctx);
+        return ret;
+    }
+
+    int ProcessHandshake(std::vector<unsigned char> &sharedSecret) {
+        int ret = -1;
+        HANDSHAKE_REQUEST * response = nullptr;
         HANDSHAKE_REQUEST * request = GetHandshakeRequest();
 
         if (!request)
@@ -614,13 +692,25 @@ out:
         }
 
 
-        /*EC_KEY_key2buf*/
-        /*EC_KEY_oct2key*/
+        response = FormHandshakeResponse(ASN1_INTEGER_get(request->tbs->sessionId),
+                                         key);
+        if (!response) {
+            goto out;
+        }
 
+        ret = SetHangshakeResponse(response);
+        HANDSHAKE_REQUEST_free(response);
+
+        if (ret) {
+            goto out;
+        }
+
+        ret = DeriveSecret(key, peerKey, sharedSecret);
 out:
         EC_KEY_free(peerKey);
         EC_KEY_free(key);
         HANDSHAKE_REQUEST_free(request);
+        HANDSHAKE_REQUEST_free(response);
 
         return ret;
     }
