@@ -1,4 +1,7 @@
 #include "session.h"
+
+#include <memory>
+
 #include "reader.h"
 #include "private_key.h"
 
@@ -283,14 +286,15 @@ int Session::ProcessHandshake(std::vector<unsigned char> &sharedSecret) {
      * the default will be use. Also low-level API will be used (EC_KEY
      * insteda of EVP_PKEY
      */
-    EC_KEY *peerKey = EC_KEY_new();
+    //EC_KEY *peerKey = EC_KEY_new();
+    std::unique_ptr<EC_KEY, void (*)(EC_KEY*)> peerKey = std::unique_ptr<EC_KEY, void (*)(EC_KEY*)>(EC_KEY_new(), EC_KEY_free);
     EC_KEY *key = EC_KEY_new_by_curve_name(EC_NID);
     if (!peerKey || !key) {
         goto out;
     }
 
     if (!EC_KEY_generate_key(key) ||
-        !EC_KEY_oct2key(peerKey, request->tbs->publicKeyInfo->data,
+        !EC_KEY_oct2key(peerKey.get(), request->tbs->publicKeyInfo->data,
                         static_cast<size_t>(request->tbs->publicKeyInfo->length),
                         nullptr)) {
         goto out;
@@ -310,9 +314,9 @@ int Session::ProcessHandshake(std::vector<unsigned char> &sharedSecret) {
         goto out;
     }
 
-    ret = DeriveSecret(key, peerKey, sharedSecret);
+    ret = DeriveSecret(key, peerKey.get(), sharedSecret);
 out:
-    EC_KEY_free(peerKey);
+    //EC_KEY_free(peerKey);
     EC_KEY_free(key);
     HANDSHAKE_REQUEST_free(request);
     HANDSHAKE_REQUEST_free(response);
