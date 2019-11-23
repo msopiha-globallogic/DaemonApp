@@ -7,7 +7,7 @@ Connection::~Connection() {
 
 int Connection::StartListening() {
     mSockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (mSockfd <= 0) {
+    if (mSockfd < 0) {
         SetErr(errno);
         return -1;
     }
