@@ -24,6 +24,7 @@
 #define AES_MODE_ENCRYPT 1
 #define AES_MODE_DECRYPT 0
 #define BUF_LEN_DEFAULT 256
+#define DEVICE_ID    1234567
 
 #define MAX_CONNS 1
 
@@ -271,6 +272,10 @@ private:
                                 X509 *peerCert) {
         int ret = -1;
         std::vector<unsigned char> signedData;
+
+        if (ASN1_INTEGER_get(request->tbs->deviceId) != DEVICE_ID)
+            return -1;
+
         int signedLen = i2d_HANDSHAKE_TBS(request->tbs, nullptr);
         if (signedLen <= 0) {
             return ret;
