@@ -1,13 +1,6 @@
 #include <iostream>
-#include <fstream>
 #include <cstdio>
-#include <cstring>
-#include <errno.h>
 
-#include "crypto.h"
-#include "aes.h"
-#include "reader.h"
-#include "private_key.h"
 #include "token.h"
 #include "connection.h"
 #include "session.h"
