@@ -68,7 +68,7 @@ int Session::SetHangshakeResponse(HANDSHAKE_REQUEST *response) {
     if (len <= 0)
         return -1;
 
-    std::vector<unsigned char> resp(static_cast<unsigned long>(len));
+    std::vector<unsigned char> resp(static_cast<size_t>(len));
     unsigned char *ptr = resp.data();
     if (i2d_HANDSHAKE_REQUEST(response, &ptr) != len)
         return -1;
@@ -242,12 +242,14 @@ int Session::DeriveSecret(EC_KEY *privKey, EC_KEY *pubKey,
 
     k = EC_KEY_dup(privKey);
     if (!EVP_PKEY_assign_EC_KEY(pKey, k)) {
+        LOGE("Failed to assign private key");
         EC_KEY_free(k);
         goto out;
     }
 
     k = EC_KEY_dup(pubKey);
     if (!EVP_PKEY_assign_EC_KEY(peerKey, k)) {
+        LOGE("Failed to assign peer key");
         EC_KEY_free(k);
         goto out;
     }
@@ -256,14 +258,19 @@ int Session::DeriveSecret(EC_KEY *privKey, EC_KEY *pubKey,
     if (!ctx)
         goto out;
 
-    if (EVP_PKEY_derive_init(ctx) != 1)
+    if (EVP_PKEY_derive_init(ctx) != 1) {
+        LOGE("Failed to init ctx");
         goto out;
+    }
 
-    if (EVP_PKEY_derive_set_peer(ctx, peerKey) != 1)
+    if (EVP_PKEY_derive_set_peer(ctx, peerKey) != 1) {
+        LOGE("Failed to set peerkey to context");
         goto out;
+    }
 
     sharedSecret.resize(skeylen);
-    if (EVP_PKEY_derive(ctx, sharedSecret.data(), &skeylen)) {
+    if (EVP_PKEY_derive(ctx, sharedSecret.data(), &skeylen) != 1) {
+        LOGE("Failed to derive key");
         sharedSecret.clear();
         goto out;
     }
