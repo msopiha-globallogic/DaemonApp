@@ -1,4 +1,5 @@
-OPENSSL_DIR := /home/alukin/proj/secure_debug/DaemonApp/openssl-1.1.1d
+TOPDIR = $(shell pwd)
+OPENSSL_DIR := $(TOPDIR)/openssl-1.1.1d
 INCLUDES = -I$(OPENSSL_DIR)/include
 SRC :=  aes.cpp \
 	reader.cpp \
