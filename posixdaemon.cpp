@@ -25,7 +25,7 @@ auto PosixDaemon::init(int argc, char **argv) -> bool {
         m_con.setKeyFile(cmdParser.getKey());
         m_con.setCertFile(cmdParser.getCert());
     } catch (const std::invalid_argument& ia) {
-        std::cerr << "Invalid argument: " << ia.what() << "\n";
+        LOGE("Invalid argument: %s\n", ia.what());
         return false;
     }
 
@@ -55,11 +55,11 @@ auto PosixDaemon::run() -> void {
     // Make child process
     pid_t child_pid = fork();
     if(child_pid < 0){
-        std::cerr << "Error: failed to fork this process." << "\n";
+        LOGE("Error: failed to fork this process.\n");
         return;
     }
     if(child_pid > 0){
-        std::cout << "Process ID of child process = " << child_pid << "\n";
+        LOGE("Process ID of child process = %d\n", child_pid);
         return;
     }
     // Umask file mode
@@ -77,17 +77,17 @@ auto PosixDaemon::run() -> void {
     if(fs.good()){
         int pid;
         fs >> pid;
-        std::cerr << " [LOG] Kill process of PID = " << pid << "\n";
+        LOGE(" [LOG] Kill process of PID = %d\n", pid);
         ::kill(-pid, SIGTERM);
         fs.close();
     }
     auto fo = std::ofstream(m_pidfile);
     if(fo.good()){
         int pid = ::getpid();
-        std::cerr << "Child PID = " << pid << "\n";
+        LOGE("Child PID = %d\n", pid);
         fo << pid  << std::flush;
     } else {
-        std::cerr << " [LOG] Error: could not open PID file " << m_pidfile << "\n";
+        LOGE(" [LOG] Error: could not open PID file %s\n", m_pidfile.c_str());
         return;
     }
     // Close stdin, stdout and stderr file descriptors.
