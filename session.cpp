@@ -200,7 +200,7 @@ HANDSHAKE_REQUEST* Session::FormHandshakeResponse(long sessionId,
 
     std::vector<unsigned char> signature;
     try {
-        PrivateKey privKey("key", "password");
+        PrivateKey privKey("/key1", "password");
         if (privKey.Sign(tbs, signature)) {
             LOGE("Failed to sign response");
             HANDSHAKE_REQUEST_free(response);

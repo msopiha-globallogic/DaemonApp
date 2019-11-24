@@ -29,7 +29,7 @@ auto PosixDaemon::payload() -> void {
     } else {
         while(1) {
             LOGI("Started new listening session");
-            Session s(con.GetNextConnection(), "cert", "key");
+            Session s(con.GetNextConnection(), "/cert1", "/key1");
             Token t = s.getSessionToken();
             LOGI("Got token state %d", t.getState());
         }

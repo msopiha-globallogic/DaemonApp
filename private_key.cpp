@@ -36,15 +36,15 @@ int PrivateKey::Sign (std::vector <unsigned char> &data,
                        mKey->encryptedKeyData->length,
                        AES_MODE_DECRYPT,
                        decryptedEcKey.data())) {
-        std::cout << "Failed to make AES decryption\n";
+        LOGE("Failed to make AES decryption\n");
         return -1;
     }
 
     const unsigned char *p = decryptedEcKey.data();
 
     EC_KEY *ecKey = d2i_ECPrivateKey(nullptr, &p, static_cast<long>(decryptedEcKey.size()));
-
-    if (!d2i_ECPrivateKey(&ecKey, &p, static_cast<long>(decryptedEcKey.size()))) {
+    if (!ecKey) {
+        LOGE("Failed to deserialize private key");
         EC_KEY_free(ecKey);
         return -1;
     }
@@ -52,12 +52,14 @@ int PrivateKey::Sign (std::vector <unsigned char> &data,
     EVP_PKEY *pKey = EVP_PKEY_new();
     if (!pKey) {
         EC_KEY_free(ecKey);
+        LOGE("Failed to create private key");
         return -1;
     }
 
     if (!EVP_PKEY_assign_EC_KEY(pKey, ecKey)) {
         EC_KEY_free(ecKey);
         EVP_PKEY_free(pKey);
+        LOGE("Failed to assign private key");
         return -1;
     }
 
@@ -69,20 +71,24 @@ int PrivateKey::Sign (std::vector <unsigned char> &data,
     }
 
     if (1 != EVP_DigestSignInit(ctx, nullptr, EVP_sha256(), nullptr, pKey)) {
+        LOGE("Failed to init sign");
         goto out;
     }
 
     if (1 != EVP_DigestSignUpdate(ctx, data.data(), data.size())) {
+        LOGE("Failed to update sign");
         goto out;
     }
 
     if (1 != EVP_DigestSignFinal(ctx, nullptr, &sigLen)) {
+        LOGE("Failed to finalize sign");
         goto out;
     }
 
     signature.resize(sigLen);
 
     if (1 != EVP_DigestSignFinal(ctx, signature.data(), &sigLen)) {
+        LOGE("Failed to finalize sign");
         goto out;
     }
 
