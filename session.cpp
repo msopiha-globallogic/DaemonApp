@@ -4,8 +4,9 @@
 
 #include "reader.h"
 #include "private_key.h"
+#include "log.h"
 
-#define BUF_LEN_DEFAULT 256
+#define BUF_LEN_DEFAULT 512
 #define DEVICE_ID    1234567
 
 ASN1_SEQUENCE(HANDSHAKE_TBS) = {
@@ -39,8 +40,9 @@ Session::~Session () {
 
 Token Session::getSessionToken() {
     std::vector<unsigned char> sharedKey;
-    if (ProcessHandshake(sharedKey))
+    if (ProcessHandshake(sharedKey)) {
         return Token();
+    }
 
     return GetToken(sharedKey);
 }
@@ -52,14 +54,13 @@ HANDSHAKE_REQUEST* Session::GetHandshakeRequest() {
      */
     std::vector<unsigned char> buf(BUF_LEN_DEFAULT);
     ssize_t bytes = read(mFd, buf.data(), buf.size());
-    if (!bytes || bytes < 0) {
+    if (bytes <= 0) {
+        LOGE("No data received.");
         return nullptr;
     }
 
-    buf.resize(static_cast<size_t>(bytes));
-
     const unsigned char *ptr = buf.data();
-    return d2i_HANDSHAKE_REQUEST(nullptr, &ptr, static_cast<long>(buf.size()));
+    return d2i_HANDSHAKE_REQUEST(nullptr, &ptr, bytes);
 }
 
 int Session::SetHangshakeResponse(HANDSHAKE_REQUEST *response) {
@@ -160,12 +161,18 @@ HANDSHAKE_REQUEST* Session::FormHandshakeResponse(long sessionId,
         return nullptr;
     }
     int len = i2o_ECPublicKey(key, nullptr);
+    if (len <= 0) {
+        LOGE("Failed to serialize EC public key");
+        HANDSHAKE_REQUEST_free(response);
+        return nullptr;
+    }
 
     std::vector<unsigned char> data;
     data.resize(static_cast<size_t>(len));
 
     unsigned char *ptr = data.data();
     if (i2o_ECPublicKey(key, &ptr) != len) {
+        LOGE("Failed to serialize EC public key");
         HANDSHAKE_REQUEST_free(response);
         return nullptr;
     }
@@ -193,11 +200,13 @@ HANDSHAKE_REQUEST* Session::FormHandshakeResponse(long sessionId,
     try {
         PrivateKey privKey("key", "password");
         if (privKey.Sign(tbs, signature)) {
+            LOGE("Failed to sign response");
             HANDSHAKE_REQUEST_free(response);
             return nullptr;
         }
     }
     catch (int e) {
+        LOGE("Failed to read key file - %s", strerror(e));
         return nullptr;
     }
 
@@ -269,54 +278,67 @@ out:
 
 int Session::ProcessHandshake(std::vector<unsigned char> &sharedSecret) {
     int ret = -1;
-    HANDSHAKE_REQUEST * response = nullptr;
-    HANDSHAKE_REQUEST * request = GetHandshakeRequest();
+    HANDSHAKE_REQUEST *response = nullptr;
+    HANDSHAKE_REQUEST *request = GetHandshakeRequest();
 
-    if (!request)
+    LOGI("Received incoming request. Verifying...");
+
+    if (!request) {
+        LOGE("Failed to receive handshake request");
         return ret;
+    }
 
     const unsigned char *ptr = request->tbs->publicKeyInfo->data;
 
     if (!VerifyHandshakeRequest(request)) {
+        LOGE("Failed to verify handshake request");
         HANDSHAKE_REQUEST_free(request);
         return ret;
     }
+
+    LOGI("    Handshake accepted.");
 
     /*
      * for demo we will not be checking EC params -
      * the default will be use. Also low-level API will be used (EC_KEY
      * insteda of EVP_PKEY
      */
-    //EC_KEY *peerKey = EC_KEY_new();
-    std::unique_ptr<EC_KEY, void (*)(EC_KEY*)> peerKey = std::unique_ptr<EC_KEY, void (*)(EC_KEY*)>(EC_KEY_new(), EC_KEY_free);
+    EC_KEY *peerKey = EC_KEY_new_by_curve_name(EC_NID);
+    //std::unique_ptr<EC_KEY, void (*)(EC_KEY*)> peerKey = std::unique_ptr<EC_KEY, void (*)(EC_KEY*)>(EC_KEY_new(), EC_KEY_free);
     EC_KEY *key = EC_KEY_new_by_curve_name(EC_NID);
-    EC_KEY *p = peerKey.get();
+    //EC_KEY *p = peerKey.get();
     if (!peerKey || !key) {
         goto out;
     }
 
     if (!EC_KEY_generate_key(key) ||
-        !o2i_ECPublicKey(&p, &ptr,
+        !o2i_ECPublicKey(&peerKey, &ptr,
                          static_cast<long>(request->tbs->publicKeyInfo->length))) {
+        LOGE("Failed to restore peer public key.");
         goto out;
     }
 
     response = FormHandshakeResponse(ASN1_INTEGER_get(request->tbs->sessionId),
                                      key);
     if (!response) {
+        LOGE("Failed to form handshake response.");
         goto out;
     }
 
     ret = SetHangshakeResponse(response);
-    HANDSHAKE_REQUEST_free(response);
 
     if (ret) {
+        LOGE("Failed to send handshake response");
         goto out;
     }
 
-    ret = DeriveSecret(key, peerKey.get(), sharedSecret);
+    LOGI("    Handshake response sent.");
+
+    ret = DeriveSecret(key, peerKey, sharedSecret);
+
+    LOGI("    Shared secret %s", ret ? "failed to derive." : "derived.");
 out:
-    //EC_KEY_free(peerKey);
+    EC_KEY_free(peerKey);
     EC_KEY_free(key);
     HANDSHAKE_REQUEST_free(request);
     HANDSHAKE_REQUEST_free(response);

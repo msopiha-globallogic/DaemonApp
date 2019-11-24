@@ -26,13 +26,12 @@ auto PosixDaemon::payload() -> void {
     Connection con(8080);
     if (con.StartListening() != 0) {
         LOGE("Failed to start listening. Err = %s\n", con.GetLastErrorString().c_str());
-//        std::cout << "Failed to start listening. Err = " << con.GetLastErrorString()
-//                  << std::endl;
     } else {
         while(1) {
+            LOGI("Started new listening session");
             Session s(con.GetNextConnection(), "cert", "key");
             Token t = s.getSessionToken();
-            std::cout << "Got token state " << t.getState();
+            LOGI("Got token state %d", t.getState());
         }
     }
 }
