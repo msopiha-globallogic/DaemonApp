@@ -59,6 +59,7 @@ HANDSHAKE_REQUEST* Session::GetHandshakeRequest() {
         return nullptr;
     }
 
+    buf.resize(static_cast<size_t>(bytes));
     const unsigned char *ptr = buf.data();
     return d2i_HANDSHAKE_REQUEST(nullptr, &ptr, bytes);
 }
@@ -82,6 +83,9 @@ int Session::SetHangshakeResponse(HANDSHAKE_REQUEST *response) {
     return 0;
 }
 
+/**
+ * Note: We don't do any certificate encryption for demo purpose
+ */
 X509* Session::GetPeerCert () {
     Reader r(mPeerCertFileName);
     const unsigned char* certPtr = r.GetContent().data();
@@ -101,9 +105,9 @@ int Session::VerifyHandshakeRequest (HANDSHAKE_REQUEST *request) {
         return ret;
     }
 
+    signedData.resize(static_cast<unsigned long>(signedLen));
     unsigned char *ptr = signedData.data();
 
-    signedData.resize(static_cast<unsigned long>(signedLen));
     if (i2d_HANDSHAKE_TBS(request->tbs, &ptr) != signedLen) {
         return ret;
     }
@@ -183,15 +187,15 @@ HANDSHAKE_REQUEST* Session::FormHandshakeResponse(long sessionId,
         return nullptr;
     }
 
-    int signedLen = i2d_HANDSHAKE_TBS(response->tbs, nullptr);
-    if (signedLen <= 0) {
+    int tbsLen = i2d_HANDSHAKE_TBS(response->tbs, nullptr);
+    if (tbsLen <= 0) {
         HANDSHAKE_REQUEST_free(response);
         return nullptr;
     }
 
-    std::vector<unsigned char> tbs(static_cast<size_t>(signedLen));
+    std::vector<unsigned char> tbs(static_cast<size_t>(tbsLen));
     ptr = tbs.data();
-    if (i2d_HANDSHAKE_TBS(response->tbs, &ptr) != signedLen) {
+    if (i2d_HANDSHAKE_TBS(response->tbs, &ptr) != tbsLen) {
         HANDSHAKE_REQUEST_free(response);
         return nullptr;
     }
@@ -297,7 +301,7 @@ int Session::ProcessHandshake(std::vector<unsigned char> &sharedSecret) {
 
     const unsigned char *ptr = request->tbs->publicKeyInfo->data;
 
-    if (!VerifyHandshakeRequest(request)) {
+    if (VerifyHandshakeRequest(request)) {
         LOGE("Failed to verify handshake request");
         HANDSHAKE_REQUEST_free(request);
         return ret;

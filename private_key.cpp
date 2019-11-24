@@ -1,7 +1,7 @@
 #include "private_key.h"
 #include "reader.h"
 #include <errno.h>
-
+#include "log.h"
 ASN1_SEQUENCE(KEY_BLOB) = {
     ASN1_SIMPLE(KEY_BLOB, encryptedKeyData, ASN1_OCTET_STRING),
     ASN1_SIMPLE(KEY_BLOB, tag, ASN1_OCTET_STRING),
@@ -40,11 +40,9 @@ int PrivateKey::Sign (std::vector <unsigned char> &data,
         return -1;
     }
 
-    EC_KEY *ecKey = EC_KEY_new_by_curve_name(EC_NID);
-    if (!ecKey)
-        return -1;
-
     const unsigned char *p = decryptedEcKey.data();
+
+    EC_KEY *ecKey = d2i_ECPrivateKey(nullptr, &p, static_cast<long>(decryptedEcKey.size()));
 
     if (!d2i_ECPrivateKey(&ecKey, &p, static_cast<long>(decryptedEcKey.size()))) {
         EC_KEY_free(ecKey);
@@ -84,6 +82,7 @@ int PrivateKey::Sign (std::vector <unsigned char> &data,
         signature.clear();
         goto out;
     }
+    signature.resize(sigLen);
 
     ret = 0;
 
