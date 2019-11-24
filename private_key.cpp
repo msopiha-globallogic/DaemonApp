@@ -31,7 +31,7 @@ int PrivateKey::Sign (std::vector <unsigned char> &data,
                                                (mKey->encryptedKeyData->length));
 
     aesKey.setIv(mKey->iv->data, mKey->iv->length);
-    aesKey.setTag(mKey->tag->data, mKey->iv->length);
+    aesKey.setTag(mKey->tag->data, mKey->tag->length);
     if (aesKey.Encrypt(mKey->encryptedKeyData->data,
                        mKey->encryptedKeyData->length,
                        AES_MODE_DECRYPT,
@@ -40,11 +40,13 @@ int PrivateKey::Sign (std::vector <unsigned char> &data,
         return -1;
     }
 
-    EC_KEY *ecKey = EC_KEY_new();
+    EC_KEY *ecKey = EC_KEY_new_by_curve_name(EC_NID);
     if (!ecKey)
         return -1;
 
-    if (!EC_KEY_oct2priv(ecKey, decryptedEcKey.data(), decryptedEcKey.size())) {
+    const unsigned char *p = decryptedEcKey.data();
+
+    if (!d2i_ECPrivateKey(&ecKey, &p, static_cast<long>(decryptedEcKey.size()))) {
         EC_KEY_free(ecKey);
         return -1;
     }

@@ -87,7 +87,7 @@ int AES::Encrypt(unsigned char *data,
      * In current scenarion no big data is expected, so all input can be consumed
      * in a single update call. This also explains funtion parameters and design.
      */
-    if (!pCryptUpdate(ctx, data, &outLen, out, dataLen) ||
+    if (!pCryptUpdate(ctx, out, &outLen, data, dataLen) ||
          outLen != dataLen) {
         goto err;
     }
@@ -110,6 +110,7 @@ int AES::Encrypt(unsigned char *data,
     ret = 0;
 
 err:
+    EVP_CIPHER_CTX_cleanup(ctx);
     EVP_CIPHER_CTX_free(ctx);
     return ret;
 }
