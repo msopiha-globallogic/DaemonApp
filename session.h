@@ -12,8 +12,8 @@
 
 class Session {
 public:
-    Session(int fd, std::string cert, std::string key) : mFd(fd),
-        mPeerCertFileName(cert), mPrivateKeyFileName(key) {}
+    Session(int fd, std::string cert, std::string key, std::string pwd) : mFd(fd),
+        mPeerCertFileName(cert), mPrivateKeyFileName(key), mPassword(pwd) {}
     ~Session ();
 
     Token getSessionToken();
@@ -22,6 +22,7 @@ private:
     int mFd;
     std::string mPeerCertFileName;
     std::string mPrivateKeyFileName;
+    std::string mPassword;
     std::vector<unsigned short> mSharedSecret;
 
     X509 *GetPeerCert();

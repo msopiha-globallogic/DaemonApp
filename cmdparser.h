@@ -9,9 +9,9 @@ class CmdParser
 {
 public:
     CmdParser(int argc, char** argv);
-    std::string getPass();
-    std::string getCert();
-    std::string getKey();
+    std::string& getPass();
+    std::string& getCert();
+    std::string& getKey();
 
 private:
     const char* const m_short_opts = "k:c:p:h";

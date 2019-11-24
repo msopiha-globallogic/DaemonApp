@@ -15,21 +15,36 @@
 #include "token.h"
 #include "connection.h"
 #include "session.h"
+#include "cmdparser.h"
 
-auto PosixDaemon::init() -> bool {
+auto PosixDaemon::init(int argc, char **argv) -> bool {
+
+    try {
+        CmdParser cmdParser(argc, argv);
+        m_con.setPwd(cmdParser.getPass());
+        m_con.setKeyFile(cmdParser.getKey());
+        m_con.setCertFile(cmdParser.getCert());
+    } catch (const std::invalid_argument& ia) {
+        std::cerr << "Invalid argument: " << ia.what() << "\n";
+        return false;
+    }
+
     return true;
 }
 
 
 auto PosixDaemon::payload() -> void {
     LOGI("Payload start");
-    Connection con(8080);
-    if (con.StartListening() != 0) {
-        LOGE("Failed to start listening. Err = %s\n", con.GetLastErrorString().c_str());
+
+    if (m_con.StartListening() != 0) {
+        LOGE("Failed to start listening. Err = %s\n", m_con.GetLastErrorString().c_str());
     } else {
         while(1) {
             LOGI("Started new listening session");
-            Session s(con.GetNextConnection(), "/cert1", "/key1");
+            Session s(m_con.GetNextConnection(),
+                      m_con.getCertFile(),
+                      m_con.getKeyFile(),
+                      m_con.getPwdFile());
             Token t = s.getSessionToken();
             LOGI("Got token state %d", t.getState());
         }

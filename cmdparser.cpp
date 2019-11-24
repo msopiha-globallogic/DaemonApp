@@ -76,14 +76,14 @@ CmdParser::CmdParser(int argc, char **argv)
 
 }
 
-std::string CmdParser::getCert() {
+std::string& CmdParser::getCert() {
     return m_cert;
 }
 
-std::string CmdParser::getKey() {
+std::string& CmdParser::getKey() {
     return m_key;
 }
 
-std::string CmdParser::getPass() {
+std::string& CmdParser::getPass() {
     return m_pass;
 }

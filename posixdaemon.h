@@ -2,12 +2,16 @@
 #define POSIXDAEMON_H
 
 #include <string>
+#include "connection.h"
+
+#define DAEMON_PORT_DEFAULT 8080
 
 class PosixDaemon{
 public:
     PosixDaemon(std::string path, std::string pidfile)
         : m_path(std::move(path)),
-          m_pidfile(std::move(pidfile)) { }
+          m_pidfile(std::move(pidfile)),
+          m_con(DAEMON_PORT_DEFAULT){ }
     ~PosixDaemon(){}
 
     // Disable copy constructor in order to forbid copy
@@ -17,11 +21,12 @@ public:
 
     auto run() -> void;
 
-    auto init() -> bool;
+    auto init(int argc, char **argv) -> bool;
 
 private:
     std::string m_path;
     std::string m_pidfile;
+    Connection m_con;
 
     auto payload() -> void;
 };

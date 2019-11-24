@@ -23,12 +23,24 @@ public:
     int GetLastError();
     std::string GetLastErrorString();
 
+    void setPwd(std::string &pwd);
+    void setKeyFile(std::string &keyFile);
+    void setCertFile(std::string &certFile);
+
+    std::string& getCertFile();
+    std::string& getKeyFile();
+    std::string& getPwdFile();
+
 private:
     bool mOpen;
     int mSockfd;
     int mLastError;
     unsigned short mPort;
     void SetErr(int err);
+
+    std::string mCertFile;
+    std::string mKeyFile;
+    std::string mPwd;
 };
 
 #endif // CONNECTION_H

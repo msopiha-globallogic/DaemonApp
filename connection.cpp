@@ -47,3 +47,23 @@ std::string Connection::GetLastErrorString() {
 void Connection::SetErr(int err) {
     mLastError = err;
 }
+
+void Connection::setPwd(std::string &pwd) {
+    mPwd = pwd;
+}
+void Connection::setKeyFile(std::string &keyFile) {
+    mKeyFile = keyFile;
+}
+void Connection::setCertFile(std::string &certFile) {
+    mCertFile = certFile;
+}
+
+std::string& Connection::getCertFile() {
+    return mCertFile;
+}
+std::string& Connection::getKeyFile() {
+    return mKeyFile;
+}
+std::string& Connection::getPwdFile() {
+    return mPwd;
+}
