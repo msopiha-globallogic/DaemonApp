@@ -5,6 +5,8 @@
 #include "reader.h"
 #include "private_key.h"
 #include "log.h"
+#include <openssl/pem.h>
+
 
 #define BUF_LEN_DEFAULT 512
 #define DEVICE_ID    1234567
@@ -114,7 +116,7 @@ int Session::VerifyHandshakeRequest (HANDSHAKE_REQUEST *request) {
 
     X509 *peerCert = GetPeerCert();
     if (!peerCert) {
-        return -1;
+        return ret;
     }
 
     EVP_PKEY *pKey = X509_get0_pubkey(peerCert);
@@ -123,31 +125,27 @@ int Session::VerifyHandshakeRequest (HANDSHAKE_REQUEST *request) {
         return ret;
     }
 
-    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
+    EVP_MD_CTX *ctx = EVP_MD_CTX_create();
     if (!ctx) {
         X509_free(peerCert);
         return ret;
     }
 
-    if (!EVP_PKEY_verify_init(ctx)) {
-        goto out;
-    }
-
     /* using default signature hashing alg sha256 for demo*/
-    if (!EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256())) {
+    if (1 != EVP_DigestVerifyInit(ctx, nullptr, EVP_sha256(), nullptr, pKey)) {
         goto out;
     }
 
-    if(EVP_PKEY_verify(ctx,
-                       request->signature->data,
-                       static_cast<size_t>(request->signature->length),
-                       signedData.data(),
-                       static_cast<size_t>(signedLen)) != 1)
+    if (1 != EVP_DigestVerify(ctx, request->signature->data,
+                              static_cast<size_t>(request->signature->length),
+                              signedData.data(), signedData.size())) {
+        LOGE("Failed to verify signature.");
         goto out;
+    }
 
     ret = 0;
 out:
-    EVP_PKEY_CTX_free(ctx);
+    EVP_MD_CTX_free(ctx);
     X509_free(peerCert);
     return ret;
 }

@@ -62,32 +62,35 @@ int PrivateKey::Sign (std::vector <unsigned char> &data,
     }
 
     int ret = -1;
-    EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(pKey, nullptr);
-    if (!EVP_PKEY_sign_init(ctx)) {
+    size_t sigLen = 0;
+    EVP_MD_CTX *ctx = EVP_MD_CTX_create();
+    if (!ctx) {
         goto out;
     }
 
-    if (!EVP_PKEY_CTX_set_signature_md(ctx, EVP_sha256())) {
+    if (1 != EVP_DigestSignInit(ctx, nullptr, EVP_sha256(), nullptr, pKey)) {
         goto out;
     }
 
-    size_t sigLen;
+    if (1 != EVP_DigestSignUpdate(ctx, data.data(), data.size())) {
+        goto out;
+    }
 
-    if (EVP_PKEY_sign(ctx, nullptr, &sigLen, data.data(), data.size()) != 1) {
+    if (1 != EVP_DigestSignFinal(ctx, nullptr, &sigLen)) {
         goto out;
     }
 
     signature.resize(sigLen);
-    if (EVP_PKEY_sign(ctx, signature.data(), &sigLen, data.data(), data.size()) != 1) {
-        signature.clear();
+
+    if (1 != EVP_DigestSignFinal(ctx, signature.data(), &sigLen)) {
         goto out;
     }
-    signature.resize(sigLen);
 
+    signature.resize(sigLen);
     ret = 0;
 
 out:
-    EVP_PKEY_CTX_free(ctx);
+    EVP_MD_CTX_free(ctx);
     EVP_PKEY_free(pKey);
     return ret;
 }
