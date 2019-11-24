@@ -1,5 +1,5 @@
 TOPDIR = $(shell pwd)
-OPENSSL_DIR := $(TOPDIR)/openssl-1.1.1d
+OPENSSL_DIR := $(TOPDIR)/../openssl-1.1.1d
 INCLUDES = -I$(OPENSSL_DIR)/include
 SRC :=  aes.cpp \
 	connection.cpp \

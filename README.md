@@ -10,5 +10,6 @@ To make this buildable:
 3.  ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl -Wl,--enable-new-dtags,-rpath,$(LIBRPATH)
     make -jx
 
-2. Configure your path to openssl directory in makefile (the openssl that was built in step 1)
-3. Use 'make' command to build.
+4. Configure your path to openssl directory in makefile (the openssl that was built in step 1)
+    By default openssl is alongside DaemonApp and TokenApp project
+5. Use 'make' command to build.
