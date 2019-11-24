@@ -27,6 +27,7 @@ private:
     std::string m_key = "";
     std::string m_cert = "";
 
+    bool file_exists (const std::string& name);
     void printHelp();
 
 };

@@ -2,7 +2,6 @@
 
 #include <iostream>
 #include <string>
-#include <stdlib.h>
 
 #include "log.h"
 
@@ -16,11 +15,20 @@ void CmdParser::printHelp() {
             "\n";
 }
 
+bool CmdParser::file_exists (const std::string& name) {
+    if (FILE *file = fopen(name.c_str(), "r")) {
+        fclose(file);
+        return true;
+    } else {
+        return false;
+    }
+}
+
 CmdParser::CmdParser(int argc, char **argv)
 {
     if (argc == 1) {
         printHelp();
-        exit(1);
+        throw std::invalid_argument( "Invalid arguments" );
     }
     while (true)
     {
@@ -53,6 +61,19 @@ CmdParser::CmdParser(int argc, char **argv)
             break;
         }
     }
+    if(m_key.empty() || !file_exists(m_key)) {
+        printHelp();
+        throw std::invalid_argument( "Key file required" );
+    }
+    if(m_cert.empty() || !file_exists(m_cert)) {
+        printHelp();
+        throw std::invalid_argument( "Certificate file required" );
+    }
+    if(m_pass.empty()) {
+        printHelp();
+        throw std::invalid_argument( "Pass can't be empty" );
+    }
+
 }
 
 std::string CmdParser::getCert() {
