@@ -35,7 +35,7 @@ No callbacks (ASN1_OP_D2I_POST/ASN1_OP_NEW_POST, etc..) were implemented.
 Only predefined standard structures and algorithms were used.
 No secure coding libraries were used.
 No memory management procedures were made to avoid sensitive data leakage.
-
+No smart pointers were used.
 
 Please find build instructions below.
 
