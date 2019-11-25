@@ -17,7 +17,11 @@ int main(int argc, char** argv){
         "/tmp/sdbg-server.pid"
     };
 
-    daemon.init(argc, argv);
+    if (!daemon.init(argc, argv)) {
+        std::cout << "The nitialization failed. Daemon was not started.\n"
+                     "Check syslog for details\n";
+        return -1;
+    }
     daemon.run();
     return 0;
 }
