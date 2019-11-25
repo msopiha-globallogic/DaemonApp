@@ -31,16 +31,6 @@ std::vector<unsigned char>& AES::getTag () {
     return mTag;
 }
 
-/**
- * @brief               Encrypts/decrypts the data.
- *
- * @note                Encrypted/decrypted data is written in the same buffer as input data.
- *
- * @param data          Data to encrypt.
- * @param dataLen       Data length.
- * @param mode          AES_MODE_ENCRYPT or AES_MODE_DECRYPT
- * @return              0 on success, -1 on failure
- */
 int AES::Encrypt(unsigned char *data,
                  const int dataLen,
                  const int mode,
