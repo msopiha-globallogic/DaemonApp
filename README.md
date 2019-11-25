@@ -13,8 +13,8 @@ a peer application, implementing the same protocol.
 
 For demo purpose it is set that 8080 port is only listening for token requests.
 As the result - any incoming connection request will produce a token value:
- - <Invalid> for anything that does not pass authentication;
- - <Debug Off>/<Debug On> request if authentication is passed and correct token value is accepted.
+ - |Invalid| for anything that does not pass authentication;
+ - |Debug Off|/|Debug On| request if authentication is passed and correct token value is accepted.
 
 
 The posixdaemon_app requires 2 files and 3 parameters fo successfull start:
