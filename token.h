@@ -5,8 +5,8 @@ class Token {
 public:
     Token(): mState(SecurityState::Invalid){}
     enum SecurityState {
-        Permissive = 0,
-        Enforced,
+        DebugEnabled = 0,
+        DebugDisabled,
         Invalid
     };
 
@@ -16,11 +16,11 @@ public:
 
     void setState(long state) {
         switch (state) {
-        case Permissive:
-            mState = Permissive;
+        case DebugEnabled:
+            mState = DebugEnabled;
             break;
-        case Enforced:
-            mState = Enforced;
+        case DebugDisabled:
+            mState = DebugDisabled;
             break;
         default:
             break;
@@ -28,7 +28,7 @@ public:
     }
 
 private:
-    SecurityState  mState;
+    SecurityState  mState = DebugDisabled;
 };
 
 #endif // TOKEN_H
