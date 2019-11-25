@@ -29,6 +29,11 @@ auto PosixDaemon::init(int argc, char **argv) -> bool {
         return false;
     }
 
+    if (m_con.StartListening() != 0) {
+        LOGE("Failed to start listening. Err = %s\n", m_con.GetLastErrorString().c_str());
+        return false;
+    }
+
     return true;
 }
 
@@ -36,23 +41,18 @@ auto PosixDaemon::init(int argc, char **argv) -> bool {
 auto PosixDaemon::payload() -> void {
     LOGI("Payload start");
 
-    if (m_con.StartListening() != 0) {
-        LOGE("Failed to start listening. Err = %s\n", m_con.GetLastErrorString().c_str());
-    } else {
-        while(1) {
-            LOGI("Started new listening session");
-            Session s(m_con.GetNextConnection(),
-                      m_con.getCertFile(),
-                      m_con.getKeyFile(),
-                      m_con.getPwdFile());
-            Token t = s.getSessionToken();
-            LOGI("Got token state: %s.", t.getTokenStateStr().c_str());
-            if(t.isDebugEnabled()) {
-                LOGI("Secure Debug ENABLED!!!\n");
-            } else {
-                LOGI("Secure Debug disabled\n");
-            }
-
+    while(1) {
+        LOGI("Started new listening session");
+        Session s(m_con.GetNextConnection(),
+                  m_con.getCertFile(),
+                  m_con.getKeyFile(),
+                  m_con.getPwdFile());
+        Token t = s.getSessionToken();
+        LOGI("Got token state: %s.", t.getTokenStateStr().c_str());
+        if(t.isDebugEnabled()) {
+            LOGI("Secure Debug ENABLED!!!\n");
+        } else {
+            LOGI("Secure Debug disabled\n");
         }
     }
 }
