@@ -1,7 +1,8 @@
 This daemon application was developed for a demonstration purpose only.
 
-To enable loading by a systemd put secure-debug-access.service file into lib/systemd/system
-and then invoke systemctl enable secure-debug-access.service
+To enable loading by a systemd adjust paths in secure-debug-access.service and
+put this file into lib/systemd/system and then invoke:
+systemctl enable secure-debug-access.service
 
 Current setup requires launching the daemon with a command line for simple demonstration.
 Console app will configure all required parameters and launch the daemon.
@@ -23,7 +24,7 @@ The posixdaemon_app requires 2 files and 3 parameters fo successfull start:
  (1.3.132.0.35 OID - eliptic curve identifier)) to verify a handshake request;
 - string password;
 - path to a file containing DER-encoded eliptic curve private key, generated for 
-  daemon app, encrypted with AES GCM. The AES key derivation: SHA256(<string password>).
+  daemon app, encrypted with AES GCM. The AES key derivation: SHA256(string password).
   The key is used to sign handshake response.
 
 The peer app requires the same data: a cerificate for a private key, used by daemon,
