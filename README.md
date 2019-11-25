@@ -1,6 +1,7 @@
 This daemon application was developed for a demonstration purpose only.
 
-To enable loading by a systemd - a .service file is required.
+To enable loading by a systemd put secure-debug-access.service file into lib/systemd/system
+and then invoke systemctl enable secure-debug-access.service
 
 Current setup requires launching the daemon with a command line for simple demonstration.
 Console app will configure all required parameters and launch the daemon.

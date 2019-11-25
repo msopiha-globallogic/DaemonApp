@@ -1,0 +1,14 @@
+[Unit]
+Description=Secure Debug Access service
+After=rc-local.service
+#Requires=
+Type=idle
+
+[Service]
+ExecStart=/usr/bin/sudo /usr/local/bin/posixdaemon_app &
+Restart=on-failure
+RestartSec=5s
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
