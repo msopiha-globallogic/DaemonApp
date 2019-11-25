@@ -18,7 +18,7 @@ int main(int argc, char** argv){
     };
 
     if (!daemon.init(argc, argv)) {
-        std::cout << "The nitialization failed. Daemon was not started.\n"
+        std::cout << "The initialization failed. Daemon was not started.\n"
                      "Check syslog for details\n";
         return -1;
     }
