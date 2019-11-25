@@ -22,11 +22,13 @@ public:
     /**
      * @brief               Encrypts/decrypts the data.
      *
-     * @note                Encrypted/decrypted data is written in the same buffer as input data.
+     * @note                Out data can be written in the same buffer as input data.
      *
      * @param data          Data to encrypt.
      * @param dataLen       Data length.
      * @param mode          AES_MODE_ENCRYPT or AES_MODE_DECRYPT
+     * @param out           Out buffer
+     *
      * @return              0 on success, -1 on failure
      */
     int Encrypt(unsigned char *data,
