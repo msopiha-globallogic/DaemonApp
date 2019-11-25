@@ -5,7 +5,7 @@ After=rc-local.service
 Type=idle
 
 [Service]
-ExecStart=/usr/bin/sudo /usr/local/bin/posixdaemon_app &
+ExecStart=/usr/bin/sudo /usr/local/bin/posixdaemon_app -k <key file path and file name> -c <cert file path and file name> -p <password>
 Restart=on-failure
 RestartSec=5s
 RemainAfterExit=yes
