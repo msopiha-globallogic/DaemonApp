@@ -1,5 +1,6 @@
 #ifndef TOKEN_H
 #define TOKEN_H
+#include <string>
 
 class Token {
 public:
@@ -32,6 +33,19 @@ public:
         default:
             break;
         }
+    }
+
+    std::string getTokenStateStr() {
+        switch (mState) {
+        case DebugEnabled:
+            return "Debug Enabled";
+        case DebugDisabled:
+            return "Debug Disabled";
+        default:
+            break;
+        }
+
+        return "Invalid";
     }
 
 private:
