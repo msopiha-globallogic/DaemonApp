@@ -47,6 +47,12 @@ auto PosixDaemon::payload() -> void {
                       m_con.getPwdFile());
             Token t = s.getSessionToken();
             LOGI("Got token state %d", t.getState());
+            if(t.isDebugEnabled()) {
+                LOGI("Secure Debug ENABLED!!!\n");
+            } else {
+                LOGI("Secure Debug disabled\n");
+            }
+
         }
     }
 }

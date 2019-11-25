@@ -14,6 +14,13 @@ public:
         return mState;
     }
 
+    bool isDebugEnabled() {
+        if(mState == DebugEnabled)
+            return true;
+        else
+            return false;
+    }
+
     void setState(long state) {
         switch (state) {
         case DebugEnabled:
